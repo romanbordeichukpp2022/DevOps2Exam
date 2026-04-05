@@ -57,6 +57,7 @@ resource "digitalocean_droplet" "bordeichuk_node" {
 
 # 4. Bucket (Space)
 resource "digitalocean_spaces_bucket" "bordeichuk_bucket" {
-  name   = "bordeichuk-bucket"
+  name   = "bordeichuk-app-storage-2026"
   region = "fra1"
+  acl    = "private"
 }
