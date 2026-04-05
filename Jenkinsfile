@@ -11,12 +11,14 @@ pipeline {
         stage('Fix State Sync') {
             steps {
                 dir('terraform') {
-                    // Якщо локальний файл помилки існує, заштовхуємо його в хмару
                     sh '''
                     if [ -f errored.tfstate ]; then
                         terraform init -reconfigure
-                        terraform state push errored.tfstate
-                        echo "State pushed successfully!"
+                        # Додаємо -force, щоб ігнорувати різницю в lineage
+                        terraform state push -force errored.tfstate
+                        echo "State pushed with FORCE successfully!"
+                        # Видаляємо локальний файл, щоб він не заважав наступним запускам
+                        rm errored.tfstate
                     else
                         echo "No errored.tfstate found, proceeding..."
                     fi
