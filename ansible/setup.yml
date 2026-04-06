@@ -44,14 +44,14 @@
         name: docker
         state: started
         enabled: yes
-      ignore_errors: "{{ ansible_check_mode }}
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Додавання користувача до групи docker
       user:
         name: "{{ ansible_user }}"
         groups: docker
         append: yes
-      ignore_errors: "{{ ansible_check_mode }}
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Завантаження kubectl
       get_url:
@@ -76,13 +76,13 @@
         minikube start --driver=docker --force
       register: minikube_output
       changed_when: "'Done!' in minikube_output.stdout"
-      ignore_errors: "{{ ansible_check_mode }}
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Перевірка статусу кластера
       become: no
       command: kubectl get nodes
       register: nodes_status
-      ignore_errors: "{{ ansible_check_mode }}
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Вивід статусу нод
       debug:
