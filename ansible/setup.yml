@@ -59,10 +59,11 @@
         dest: /usr/local/bin/kubectl
         mode: "0755"
 
-    - name: Завантаження та встановлення Minikube
-      apt:
-        deb: https://storage.googleapis.com/minikube/releases/latest/minikube_amd64.deb
-        state: present
+    - name: Завантаження та встановлення Minikube (Binary)
+      get_url:
+        url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        dest: /usr/local/bin/minikube
+        mode: "0755"
       ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Встановлення Helm через скрипт
