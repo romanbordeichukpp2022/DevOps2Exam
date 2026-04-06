@@ -19,9 +19,10 @@ pipeline {
     }
 
     stages {
-        stage('Cleanup & Preparation') {
+stage('Cleanup & Preparation') {
             steps {
-                deleteDir() // Очищення робочої директорії перед початком
+                deleteDir() 
+                checkout scm
                 script {
                     if (params.VM_IP == '') {
                         error "Помилка: IP-адреса (VM_IP) не вказана!"
