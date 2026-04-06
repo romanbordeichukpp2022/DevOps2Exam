@@ -57,7 +57,7 @@ pipeline {
                 // Вимога ТЗ: Прокидання проксі
                 sshagent(['vm-ssh-key']) {
                     echo "Налаштування проксі для доступу до API Minikube..."
-                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${params.VM_IP} 'nohup kubectl proxy --address=\"0.0.0.0\" --accept-hosts=\".*\" >/dev/null 2>&1 &'"
+                    sh "ssh -o StrictHostKeyChecking=no root@${params.VM_IP} 'nohup kubectl proxy --address=\"0.0.0.0\" --accept-hosts=\".*\" >/dev/null 2>&1 &'"
                 }
             }
         }
