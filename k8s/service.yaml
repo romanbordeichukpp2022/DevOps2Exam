@@ -3,11 +3,9 @@ kind: Service
 metadata:
   name: devops-app-service
 spec:
-  type: NodePort
   selector:
     app: devops-app
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 80
-      nodePort: {{PORT}}
+      port: 8000
+      targetPort: 8000

@@ -87,7 +87,18 @@ stage('Cleanup & Preparation') {
         stage('Verify Deployment') {
             steps {
                 sshagent(['vm-ssh-key']) {
-                    sh "ssh -o StrictHostKeyChecking=no root@${params.VM_IP} 'kubectl get pods && kubectl get svc'"
+                    script {
+                        sh """
+                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
+                            pkill -f 'kubectl port-forward' || true
+                            
+                            nohup kubectl port-forward --address 0.0.0.0 service/devops-app-service 8002:8000 > pf.log 2>&1 &
+                            
+                            sleep 5
+                            kubectl rollout status deployment/devops-app
+                        "
+                        """
+                    }
                 }
             }
         }
