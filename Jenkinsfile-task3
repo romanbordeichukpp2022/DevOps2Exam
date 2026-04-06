@@ -91,12 +91,14 @@ stage('Cleanup & Preparation') {
                         sh """
                         ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
                             pkill -f 'kubectl port-forward' || true
-                            echo 'kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /dev/null 2>&1' | at now
-                        " || true 
-                        
-                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
-                            sleep 3
-                            kubectl rollout status deployment/devops-app --timeout=60s
+                            
+                            nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/pf.log 2>&1 & 
+                            sleep 2
+                            disown -a
+                            
+                            netstat -tulnp | grep ${env.TARGET_PORT} || (echo 'ПОРТ НЕ СЛУХАЄТЬСЯ!' && exit 1)
+                            
+                            /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
                         "
                         """
                     }
