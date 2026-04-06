@@ -1,0 +1,82 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'release'], description: 'Виберіть середовище для розгортання')
+        string(name: 'DOCKER_HUB_USER', defaultValue: 'romanBordei4yk', description: 'Ваш Docker Hub Username')
+    }
+
+    environment {
+        DOCKER_CREDS = credentials('docker-hub-credentials')
+        APP_REPO = "https://github.com/YulianSalo/devops-exam-pt2.git"
+        IMAGE_NAME = "${params.DOCKER_HUB_USER}/devops-app"
+        VM_IP = "104.248.32.218"
+    }
+
+    stages {
+        stage('Checkout App Source') {
+            steps {
+                script {
+                    sh "rm -rf app_source"
+                    if (params.DEPLOY_ENV == 'dev') {
+                        sh "git clone -b develop ${env.APP_REPO} app_source"
+                        env.IMAGE_TAG = "develop"
+                    } else {
+                        sh "git clone -b 1.0.0 ${env.APP_REPO} app_source"
+                        env.IMAGE_TAG = "1.0.0"
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                dir('app_source') {
+                    script {
+                        sh "docker login -u ${DOCKER_CREDS_USR} -p ${DOCKER_CREDS_PSW}"
+                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+
+        stage('K8s Validation (Dry Run)') {
+            steps {
+                sshagent(['vm-ssh-key']) {
+                    // Перевірка маніфестів без реального деплою (вимога ТЗ)
+                    sh """
+                    ssh -o StrictHostKeyChecking=no root@${VM_IP} \
+                    "kubectl apply -f - --dry-run=client" <<EOF
+                    $(cat k8s/deployment.yaml | sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g")
+                    $(cat k8s/service.yaml | sed "s|{{PORT}}|${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}|g")
+EOF
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Minikube') {
+            steps {
+                sshagent(['vm-ssh-key']) {
+                    script {
+                        def targetPort = (params.DEPLOY_ENV == 'dev') ? "8002" : "8003"
+                        sh """
+                        ssh -o StrictHostKeyChecking=no root@${VM_IP} \
+                        "kubectl apply -f -" <<EOF
+                        $(cat k8s/deployment.yaml | sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g")
+                        $(cat k8s/service.yaml | sed "s|{{PORT}}|${targetPort}|g")
+EOF
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Застосунок розгорнуто! Порт: ${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}"
+        }
+    }
+}
