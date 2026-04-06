@@ -6,7 +6,7 @@ pipeline {
                description: 'Оберіть середовище: dev або release (тег 1.0.0)')
         string(name: 'VM_IP', defaultValue: '', 
                description: 'Введіть IP-адресу вашої VM')
-        string(name: 'DOCKER_HUB_USER', defaultValue: 'romanBordei4yk', 
+        string(name: 'DOCKER_HUB_USER', defaultValue: 'romanbordei4yk', 
                description: 'Username на Docker Hub')
     }
 
