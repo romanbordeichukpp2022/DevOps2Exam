@@ -59,14 +59,15 @@ stage('Cleanup & Preparation') {
         stage('K8s Validation (Dry Run)') {
             steps {
                 sshagent(['vm-ssh-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no root@${params.VM_IP} \
-                    "kubectl apply -f - --dry-run=client" <<EOF
-\$(sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml)
----
-\$(sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml)
-EOF
-                    """
+                    script {
+                        sh """
+                        sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml > combined.yaml
+                        echo "---" >> combined.yaml
+                        sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml >> combined.yaml
+                        
+                        cat combined.yaml | ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "kubectl apply -f - --dry-run=client"
+                        """
+                    }
                 }
             }
         }
@@ -74,14 +75,11 @@ EOF
         stage('Deploy to Kubernetes') {
             steps {
                 sshagent(['vm-ssh-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no root@${params.VM_IP} \
-                    "kubectl apply -f -" <<EOF
-\$(sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml)
----
-\$(sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml)
-EOF
-                    """
+                    script {
+                        sh """
+                        cat combined.yaml | ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "kubectl apply -f -"
+                        """
+                    }
                 }
             }
         }
