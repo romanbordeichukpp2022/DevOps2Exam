@@ -17,7 +17,7 @@ pipeline {
                         error "Помилка: IP адреса не вказана. Введіть VM_IP при запуску."
                     }
 
-                    sh "echo '[target_node]\n${params.VM_IP} ansible_user=ubuntu' > ${INVENTORY}"
+                    sh "echo '[target_node]\n${params.VM_IP} ansible_user=root' > ${INVENTORY}"
                 }
             }
         }
