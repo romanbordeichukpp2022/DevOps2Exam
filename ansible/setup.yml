@@ -63,6 +63,7 @@
       apt:
         deb: https://storage.googleapis.com/minikube/releases/latest/minikube_amd64.deb
         state: present
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Встановлення Helm через скрипт
       shell: |
