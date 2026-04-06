@@ -2,29 +2,39 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'DEPLOY_ENV', choices: ['dev', 'release'], description: 'Виберіть середовище для розгортання')
-        string(name: 'DOCKER_HUB_USER', defaultValue: 'romanBordei4yk', description: 'Ваш Docker Hub Username')
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'release'], 
+               description: 'Оберіть середовище: dev або release (тег 1.0.0)')
+        string(name: 'VM_IP', defaultValue: '', 
+               description: 'Введіть IP-адресу вашої VM')
+        string(name: 'DOCKER_HUB_USER', defaultValue: 'romanBordei4yk', 
+               description: 'Username на Docker Hub')
     }
 
     environment {
-        DOCKER_CREDS = credentials('docker-hub-credentials')
         APP_REPO = "https://github.com/YulianSalo/devops-exam-pt2.git"
         IMAGE_NAME = "${params.DOCKER_HUB_USER}/devops-app"
-        VM_IP = "104.248.32.218"
+        // Визначаємо тег та порт на основі вибраного середовища
+        IMAGE_TAG = "${params.DEPLOY_ENV == 'dev' ? 'develop' : '1.0.0'}"
+        TARGET_PORT = "${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}"
     }
 
     stages {
-        stage('Checkout App Source') {
+        stage('Cleanup & Preparation') {
+            steps {
+                deleteDir() // Очищення робочої директорії перед початком
+                script {
+                    if (params.VM_IP == '') {
+                        error "Помилка: IP-адреса (VM_IP) не вказана!"
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Source Code') {
             steps {
                 script {
-                    sh "rm -rf app_source"
-                    if (params.DEPLOY_ENV == 'dev') {
-                        sh "git clone -b develop ${env.APP_REPO} app_source"
-                        env.IMAGE_TAG = "develop"
-                    } else {
-                        sh "git clone -b 1.0.0 ${env.APP_REPO} app_source"
-                        env.IMAGE_TAG = "1.0.0"
-                    }
+                    // Клонуємо конкретну гілку або тег залежно від вибору
+                    sh "git clone -b ${env.IMAGE_TAG} ${env.APP_REPO} app_source"
                 }
             }
         }
@@ -32,10 +42,14 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 dir('app_source') {
-                    script {
-                        sh "docker login -u ${DOCKER_CREDS_USR} -p ${DOCKER_CREDS_PSW}"
-                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                     usernameVariable: 'DOCKER_USER', 
+                                                     passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                        docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        """
                     }
                 }
             }
@@ -44,31 +58,37 @@ pipeline {
         stage('K8s Validation (Dry Run)') {
             steps {
                 sshagent(['vm-ssh-key']) {
-                    // Перевірка маніфестів без реального деплою (вимога ТЗ)
                     sh """
-                    ssh -o StrictHostKeyChecking=no root@${VM_IP} \
+                    ssh -o StrictHostKeyChecking=no root@${params.VM_IP} \
                     "kubectl apply -f - --dry-run=client" <<EOF
-                    $(cat k8s/deployment.yaml | sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g")
-                    $(cat k8s/service.yaml | sed "s|{{PORT}}|${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}|g")
+\$(sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml)
+---
+\$(sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml)
 EOF
                     """
                 }
             }
         }
 
-        stage('Deploy to Minikube') {
+        stage('Deploy to Kubernetes') {
             steps {
                 sshagent(['vm-ssh-key']) {
-                    script {
-                        def targetPort = (params.DEPLOY_ENV == 'dev') ? "8002" : "8003"
-                        sh """
-                        ssh -o StrictHostKeyChecking=no root@${VM_IP} \
-                        "kubectl apply -f -" <<EOF
-                        $(cat k8s/deployment.yaml | sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g")
-                        $(cat k8s/service.yaml | sed "s|{{PORT}}|${targetPort}|g")
+                    sh """
+                    ssh -o StrictHostKeyChecking=no root@${params.VM_IP} \
+                    "kubectl apply -f -" <<EOF
+\$(sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml)
+---
+\$(sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml)
 EOF
-                        """
-                    }
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sshagent(['vm-ssh-key']) {
+                    sh "ssh -o StrictHostKeyChecking=no root@${params.VM_IP} 'kubectl get pods && kubectl get svc'"
                 }
             }
         }
@@ -76,7 +96,10 @@ EOF
 
     post {
         success {
-            echo "Застосунок розгорнуто! Порт: ${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}"
+            echo "Застосунок доступний за адресою: http://${params.VM_IP}:${env.TARGET_PORT}"
+        }
+        failure {
+            echo "Помилка під час виконання пайплайну."
         }
     }
 }
