@@ -90,16 +90,9 @@ stage('Cleanup & Preparation') {
                     script {
                         sh """
                         ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
-                            # 1. Вбиваємо старий процес
                             pkill -f 'kubectl port-forward' || true
-                            
-                            # 2. Запускаємо в підоболонці, відв'язуємо від терміналу (disown)
-                            (nohup kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /dev/null 2>&1 & sleep 1)
-                        "
-                        # 3. Окремим підключенням перевіряємо результат
-                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
+                            echo 'kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /dev/null 2>&1' | at now
                             sleep 2
-                            pgrep -f 'kubectl port-forward' && echo 'Port-forward is running' || exit 1
                             kubectl rollout status deployment/devops-app --timeout=60s
                         "
                         """
