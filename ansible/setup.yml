@@ -37,6 +37,7 @@
           - docker-ce-cli
           - containerd.io
         state: present
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Запуск та увімкнення Docker
       service:
