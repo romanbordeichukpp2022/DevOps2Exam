@@ -51,6 +51,7 @@
         name: "{{ ansible_user }}"
         groups: docker
         append: yes
+      ignore_errors: "{{ ansible_check_mode }}
 
     - name: Завантаження kubectl
       get_url:
