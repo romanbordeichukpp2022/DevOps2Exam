@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'VM_IP', defaultValue: '', description: 'IP адреса створеної VM (Droplet)')
+    }
+
+    environment {
+        INVENTORY = "hosts.ini"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    if (params.VM_IP == '') {
+                        error "Помилка: IP адреса не вказана. Введіть VM_IP при запуску."
+                    }
+
+                    sh "echo '[target_node]\n${params.VM_IP} ansible_user=ubuntu' > ${INVENTORY}"
+                }
+            }
+        }
+
+        stage('Ansible Lint & Syntax Check') {
+            steps {
+                sh "ansible-playbook -i ${INVENTORY} ansible/setup.yml --syntax-check"
+            }
+        }
+
+        stage('Ansible Dry Run (Check Mode)') {
+            steps {
+                // Вимога ТЗ: Перевірка без реального встановлення
+                sshagent(['vm-ssh-key']) {
+                    sh """
+                    ansible-playbook -i ${INVENTORY} ansible/setup.yml \
+                    --check \
+                    --extra-vars 'ansible_ssh_common_args="-o StrictHostKeyChecking=no"'
+                    """
+                }
+            }
+        }
+
+        stage('Ansible Real Apply') {
+            steps {
+                sshagent(['vm-ssh-key']) {
+                    sh """
+                    ansible-playbook -i ${INVENTORY} ansible/setup.yml \
+                    --extra-vars 'ansible_ssh_common_args="-o StrictHostKeyChecking=no"'
+                    """
+                }
+            }
+        }
+
+        stage('Minikube Proxy & Access') {
+            steps {
+                // Вимога ТЗ: Прокидання проксі
+                sshagent(['vm-ssh-key']) {
+                    echo "Налаштування проксі для доступу до API Minikube..."
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${params.VM_IP} 'nohup kubectl proxy --address=\"0.0.0.0\" --accept-hosts=\".*\" >/dev/null 2>&1 &'"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "-----------------------------------------------------------"
+            echo "Kubernetes (Minikube) розгорнуто на ${params.VM_IP}"
+            echo "API доступне за адресою: http://${params.VM_IP}:8001/api/v1/namespaces/kubernetes-dashboard/services/http:kubernetes-dashboard:/proxy/"
+            echo "-----------------------------------------------------------"
+        }
+        always {
+            sh "rm -f ${INVENTORY}"
+        }
+    }
+}

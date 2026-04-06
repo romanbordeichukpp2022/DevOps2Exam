@@ -1,0 +1,84 @@
+---
+- name: Встановлення Kubernetes оточення (Minikube)
+  hosts: target_node
+  become: yes
+  vars:
+    # Версії компонентів
+    minikube_version: "latest"
+    kubectl_version: "v1.30.0"
+
+  tasks:
+    - name: Оновлення кешу apt та встановлення базових пакетів
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - socat
+        state: present
+        update_cache: yes
+
+    - name: Додавання GPG ключа Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Додавання репозиторію Docker
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Встановлення Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Запуск та увімкнення Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Додавання користувача до групи docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Завантаження kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+
+    - name: Завантаження та встановлення Minikube
+      apt:
+        deb: https://storage.googleapis.com/minikube/releases/latest/minikube_amd64.deb
+        state: present
+
+    - name: Встановлення Helm через скрипт
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Запуск Minikube з драйвером Docker
+      become: no
+      shell: |
+        minikube start --driver=docker --force
+      register: minikube_output
+      changed_when: "'Done!' in minikube_output.stdout"
+
+    - name: Перевірка статусу кластера
+      become: no
+      command: kubectl get nodes
+      register: nodes_status
+
+    - name: Вивід статусу нод
+      debug:
+        var: nodes_status.stdout
