@@ -1,19 +1,16 @@
-apiVersion: apps/v1
-kind: Deployment
 metadata:
-  name: devops-app
+  name: "{{APP_NAME}}"
 spec:
-  replicas: 1
   selector:
     matchLabels:
-      app: devops-app
+      app: "{{APP_NAME}}"
   template:
     metadata:
       labels:
-        app: devops-app
+        app: "{{APP_NAME}}"
     spec:
       containers:
         - name: app
-          image: {{IMAGE}}
+          image: { { IMAGE } }
           ports:
             - containerPort: 80

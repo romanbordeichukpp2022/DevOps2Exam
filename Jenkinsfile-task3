@@ -13,13 +13,14 @@ pipeline {
     environment {
         APP_REPO = "https://github.com/YulianSalo/devops-exam-pt2.git"
         IMAGE_NAME = "${params.DOCKER_HUB_USER}/devops-app"
-        // Визначаємо тег та порт на основі вибраного середовища
+        APP_NAME = "devops-app-${params.DEPLOY_ENV}"
+
         IMAGE_TAG = "${params.DEPLOY_ENV == 'dev' ? 'develop' : '1.0.0'}"
         TARGET_PORT = "${params.DEPLOY_ENV == 'dev' ? '8002' : '8003'}"
     }
 
     stages {
-stage('Cleanup & Preparation') {
+        stage('Cleanup & Preparation') {
             steps {
                 deleteDir() 
                 checkout scm
@@ -61,10 +62,10 @@ stage('Cleanup & Preparation') {
                 sshagent(['vm-ssh-key']) {
                     script {
                         sh """
-                        sed "s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml > combined.yaml
+                        sed "s|{{APP_NAME}}|${env.K8S_APP_NAME}|g; s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml > combined.yaml
                         echo "---" >> combined.yaml
-                        sed "s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml >> combined.yaml
-                        
+                        sed "s|{{APP_NAME}}|${env.K8S_APP_NAME}|g; s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml >> combined.yaml
+
                         cat combined.yaml | ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "kubectl apply -f - --dry-run=client"
                         """
                     }
