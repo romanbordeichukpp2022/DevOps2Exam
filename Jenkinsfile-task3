@@ -85,35 +85,43 @@ stage('Cleanup & Preparation') {
         }
 
         stage('Verify & Expose') {
-            steps {
-                sshagent(['vm-ssh-key']) {
-                    script {
-                        sh """
-                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} << 'EOF'
-                            export KUBECONFIG=/root/.kube/config
-                            
-                            pkill -f 'kubectl port-forward' || true
-                            sleep 1
-                            
-                            nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/port_forward.log 2>&1 &
-                            
-                            sleep 3
+    steps {
+        sshagent(['vm-ssh-key']) {
+            script {
+                sh """
+                ssh -o StrictHostKeyChecking=no root@${params.VM_IP} << 'EOF'
+                    export KUBECONFIG=/root/.kube/config
+                    
+                    # 1. Вбиваємо процес, який тримає САМЕ ЦЕЙ порт (наприклад, 8002 або 8003)
+                    # Це дозволить іншому порту продовжувати працювати
+                    PID=\\\$(lsof -t -i:${env.TARGET_PORT} || true)
+                    if [ ! -z "\\\$PID" ]; then
+                        kill -9 \\\$PID
+                        sleep 1
+                    fi
 
-                            if ss -tulnp | grep -q ":${env.TARGET_PORT}"; then
-                                echo "SUCCESS: Port ${env.TARGET_PORT} is open and forwarding!"
-                            else
-                                echo "ERROR: Port ${env.TARGET_PORT} is NOT open. Check /tmp/port_forward.log"
-                                cat /tmp/port_forward.log
-                                exit 1
-                            fi
-                            
-                            /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
+                    # 2. Запускаємо проксі саме для поточного середовища
+                    nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/pf_${params.DEPLOY_ENV}.log 2>&1 &
+                    
+                    sleep 3
+                    
+                    # 3. Перевірка доступності порту
+                    if ss -tulnp | grep -q ":${env.TARGET_PORT}"; then
+                        echo "SUCCESS: Port ${env.TARGET_PORT} is now active for ${params.DEPLOY_ENV}"
+                    else
+                        echo "ERROR: Failed to open port ${env.TARGET_PORT}"
+                        cat /tmp/pf_${params.DEPLOY_ENV}.log
+                        exit 1
+                    fi
+
+                    # 4. Фінальний контроль деплою
+                    /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
 EOF
-                        """
-                    }
-                }
+                """
             }
         }
+    }
+}
     }
 
     post {
