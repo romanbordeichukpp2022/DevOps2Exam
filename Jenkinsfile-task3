@@ -92,9 +92,11 @@ stage('Cleanup & Preparation') {
                         ssh -o StrictHostKeyChecking=no root@${params.VM_IP} << 'EOF'
                             export KUBECONFIG=/root/.kube/config
                             
-                            PID=\\\$(lsof -t -i:${env.TARGET_PORT} || true)
-                            if [ ! -z "\\\$PID" ]; then
-                                kill -9 \\\$PID
+                            PID=\$(lsof -t -i:${env.TARGET_PORT} || true)
+                            
+                            if [ -n "\$PID" ]; then
+                                echo "Killing old process \$PID on port ${env.TARGET_PORT}"
+                                kill -9 \$PID
                                 sleep 1
                             fi
 
@@ -103,7 +105,7 @@ stage('Cleanup & Preparation') {
                             sleep 3
                             
                             if ss -tulnp | grep -q ":${env.TARGET_PORT}"; then
-                                echo "SUCCESS: Port ${env.TARGET_PORT} is now active for ${params.DEPLOY_ENV}"
+                                echo "SUCCESS: Port ${env.TARGET_PORT} is active for ${params.DEPLOY_ENV}"
                             else
                                 echo "ERROR: Failed to open port ${env.TARGET_PORT}"
                                 cat /tmp/pf_${params.DEPLOY_ENV}.log
@@ -111,7 +113,7 @@ stage('Cleanup & Preparation') {
                             fi
 
                             /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
-        EOF
+EOF
                         """
                     }
                 }
