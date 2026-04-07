@@ -62,9 +62,10 @@ pipeline {
                 sshagent(['vm-ssh-key']) {
                     script {
                         sh """
-                        sed "s|{{APP_NAME}}|${env.K8S_APP_NAME}|g; s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml > combined.yaml
+                        # Використовуємо env.APP_NAME (без K8S_)
+                        sed "s|{{APP_NAME}}|${env.APP_NAME}|g; s|{{IMAGE}}|${IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yaml > combined.yaml
                         echo "---" >> combined.yaml
-                        sed "s|{{APP_NAME}}|${env.K8S_APP_NAME}|g; s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml >> combined.yaml
+                        sed "s|{{APP_NAME}}|${env.APP_NAME}|g; s|{{PORT}}|${env.TARGET_PORT}|g" k8s/service.yaml >> combined.yaml
 
                         cat combined.yaml | ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "kubectl apply -f - --dry-run=client"
                         """
@@ -96,18 +97,18 @@ pipeline {
                             fuser -k ${env.TARGET_PORT}/tcp || true
                             sleep 1
                             
-                            nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/pf_${params.DEPLOY_ENV}.log 2>&1 &
+                            nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/${env.APP_NAME}-service ${env.TARGET_PORT}:8000 > /tmp/pf_${params.DEPLOY_ENV}.log 2>&1 &
                             
                             sleep 5
                             if ss -tulnp | grep -q ':${env.TARGET_PORT}'; then
                                 echo 'УСПІХ: Порт ${env.TARGET_PORT} активовано для ${params.DEPLOY_ENV}'
                             else
-                                echo 'ПОМИЛКА: Порт ${env.TARGET_PORT} не відповідає. Лог помилки:'
+                                echo 'ПОМИЛКА: Порт ${env.TARGET_PORT} не відповідає. Лог:'
                                 cat /tmp/pf_${params.DEPLOY_ENV}.log
                                 exit 1
                             fi
                             
-                            /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
+                            /usr/local/bin/kubectl rollout status deployment/${env.APP_NAME} --timeout=60s
                         "
                         """
                     }
