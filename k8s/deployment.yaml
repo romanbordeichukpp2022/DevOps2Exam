@@ -13,6 +13,6 @@ spec:
     spec:
       containers:
         - name: app
-          image: { { IMAGE } }
+          image: {{IMAGE}}
           ports:
             - containerPort: 80
