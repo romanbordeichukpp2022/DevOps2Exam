@@ -89,31 +89,25 @@ stage('Cleanup & Preparation') {
                 sshagent(['vm-ssh-key']) {
                     script {
                         sh """
-                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} << 'EOF'
+                        ssh -o StrictHostKeyChecking=no root@${params.VM_IP} "
                             export KUBECONFIG=/root/.kube/config
                             
-                            PID=\$(lsof -t -i:${env.TARGET_PORT} || true)
+                            fuser -k ${env.TARGET_PORT}/tcp || true
                             
-                            if [ -n "\$PID" ]; then
-                                echo "Killing old process \$PID on port ${env.TARGET_PORT}"
-                                kill -9 \$PID
-                                sleep 1
-                            fi
-
                             nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/pf_${params.DEPLOY_ENV}.log 2>&1 &
                             
-                            sleep 3
+                            sleep 4
                             
-                            if ss -tulnp | grep -q ":${env.TARGET_PORT}"; then
-                                echo "SUCCESS: Port ${env.TARGET_PORT} is active for ${params.DEPLOY_ENV}"
+                            if ss -tulnp | grep -q ':${env.TARGET_PORT}'; then
+                                echo 'SUCCESS: Port ${env.TARGET_PORT} is active'
                             else
-                                echo "ERROR: Failed to open port ${env.TARGET_PORT}"
+                                echo 'ERROR: Port ${env.TARGET_PORT} is NOT open'
                                 cat /tmp/pf_${params.DEPLOY_ENV}.log
                                 exit 1
                             fi
-
+                            
                             /usr/local/bin/kubectl rollout status deployment/devops-app --timeout=60s
-EOF
+                        "
                         """
                     }
                 }
