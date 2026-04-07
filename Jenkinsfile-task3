@@ -93,15 +93,15 @@ stage('Cleanup & Preparation') {
                             export KUBECONFIG=/root/.kube/config
                             
                             fuser -k ${env.TARGET_PORT}/tcp || true
+                            sleep 1
                             
                             nohup /usr/local/bin/kubectl port-forward --address 0.0.0.0 service/devops-app-service ${env.TARGET_PORT}:8000 > /tmp/pf_${params.DEPLOY_ENV}.log 2>&1 &
                             
-                            sleep 4
-                            
+                            sleep 5
                             if ss -tulnp | grep -q ':${env.TARGET_PORT}'; then
-                                echo 'SUCCESS: Port ${env.TARGET_PORT} is active'
+                                echo 'УСПІХ: Порт ${env.TARGET_PORT} активовано для ${params.DEPLOY_ENV}'
                             else
-                                echo 'ERROR: Port ${env.TARGET_PORT} is NOT open'
+                                echo 'ПОМИЛКА: Порт ${env.TARGET_PORT} не відповідає. Лог помилки:'
                                 cat /tmp/pf_${params.DEPLOY_ENV}.log
                                 exit 1
                             fi
